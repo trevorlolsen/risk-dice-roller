@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Risk Dice Roller</title>
+  <!-- jQuery CDN -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 20px; 
+    }
+    table {
+      width: 100%;
+      margin-bottom: 20px;
+      border-collapse: collapse;
+    }
+    table td {
+      padding: 8px;
+      vertical-align: middle;
+    }
+    table td:first-child {
+      text-align: right;
+      width: 25%;
+      font-weight: bold;
+    }
+    table td:nth-child(2),
+    table td:nth-child(4) {
+      width: 8%;
+      text-align: center;
+    }
+    table td:nth-child(3) {
+      width: 35%;
+    }
+    table td:last-child {
+      width: 10%;
+      text-align: left;
+      font-weight: bold;
+    }
+    input[type="range"] { 
+      width: 100%; 
+    }
+    button.minus,
+    button.plus {
+      width: 100%;
+      font-size: 1.2em;
+      padding: 5px 0;
+      cursor: pointer;
+    }
+    /* Full-width button styled similar to Bootstrap */
+    #attack {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      font-size: 1.2em;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    #attack:hover {
+      background-color: #0056b3;
+    }
+    .result {
+      margin: 10px 0; 
+      padding: 10px; 
+      border: 1px solid #ccc;
+    }
+    .summary {
+      margin-bottom: 20px; 
+      padding: 10px; 
+      border: 2px solid #333; 
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Risk Dice Roller</h1>
+
+  <!-- Table for slider inputs with minus/plus buttons -->
+  <table>
+    <tr>
+      <td><label for="attacking">Number of Attacking Armies:</label></td>
+      <td><button class="minus" data-target="attacking">–</button></td>
+      <td><input type="range" id="attacking" value="10" min="1" max="100"></td>
+      <td><button class="plus" data-target="attacking">+</button></td>
+      <td><span id="attacking-value" class="value-display">10</span></td>
+    </tr>
+    <tr>
+      <td><label for="defending">Number of Defending Armies:</label></td>
+      <td><button class="minus" data-target="defending">–</button></td>
+      <td><input type="range" id="defending" value="5" min="1" max="100"></td>
+      <td><button class="plus" data-target="defending">+</button></td>
+      <td><span id="defending-value" class="value-display">5</span></td>
+    </tr>
+    <tr>
+      <td><label for="rolls">Number of Potential Rolls:</label></td>
+      <td><button class="minus" data-target="rolls">–</button></td>
+      <td><input type="range" id="rolls" value="10" min="1" max="50"></td>
+      <td><button class="plus" data-target="rolls">+</button></td>
+      <td><span id="rolls-value" class="value-display">10</span></td>
+    </tr>
+  </table>
+
+  <!-- Full-width Attack Button -->
+  <button id="attack">Attack</button>
+
+  <!-- Div for displaying results -->
+  <div id="results"></div>
+
+  <script>
+    // Update slider display values live as they are moved.
+    $("#attacking").on("input", function(){
+      $("#attacking-value").text($(this).val());
+    });
+    $("#defending").on("input", function(){
+      $("#defending-value").text($(this).val());
+    });
+    $("#rolls").on("input", function(){
+      $("#rolls-value").text($(this).val());
+    });
+
+    // Plus and minus button click events.
+    $(".minus").click(function(){
+      var target = $(this).data("target");
+      var slider = $("#" + target);
+      var currentVal = parseInt(slider.val());
+      var minVal = parseInt(slider.attr("min"));
+      if(currentVal > minVal) {
+        slider.val(currentVal - 1).trigger("input");
+      }
+    });
+
+    $(".plus").click(function(){
+      var target = $(this).data("target");
+      var slider = $("#" + target);
+      var currentVal = parseInt(slider.val());
+      var maxVal = parseInt(slider.attr("max"));
+      if(currentVal < maxVal) {
+        slider.val(currentVal + 1).trigger("input");
+      }
+    });
+
+    // Function to simulate rolling a single six-sided die.
+    function rollDie() {
+      return Math.floor(Math.random() * 6) + 1;
+    }
+
+    // Function to roll a specified number of dice.
+    function rollDice(numDice) {
+      var results = [];
+      for (var i = 0; i < numDice; i++) {
+        results.push(rollDie());
+      }
+      return results;
+    }
+
+    // Function to sort an array in descending order.
+    function sortDescending(arr) {
+      return arr.sort(function(a, b) { return b - a; });
+    }
+
+    // Main simulation logic.
+    $(document).ready(function(){
+      $("#attack").click(function(){
+        // Clear previous results.
+        $("#results").empty();
+
+        // Retrieve values from slider inputs and convert them to integers.
+        var attackerArmies = parseInt($("#attacking").val());
+        var defenderArmies = parseInt($("#defending").val());
+        var potentialRolls = parseInt($("#rolls").val());
+
+        // Validate input values.
+        if(isNaN(attackerArmies) || isNaN(defenderArmies) || isNaN(potentialRolls) ||
+           attackerArmies <= 0 || defenderArmies <= 0 || potentialRolls <= 0) {
+          $("#results").append("<p>Please enter valid positive numbers for all inputs.</p>");
+          return;
+        }
+
+        // Save the initial army counts to later compute losses.
+        var initialAttackerArmies = attackerArmies;
+        var initialDefenderArmies = defenderArmies;
+
+        // This string will accumulate the detailed round-by-round output.
+        var simulationOutput = "";
+        simulationOutput += "<p><em>Battle Start! Attacker Armies: " + attackerArmies +
+                            ", Defender Armies: " + defenderArmies + "</em></p>";
+
+        // Loop for each potential roll (battle round).
+        for (var round = 1; round <= potentialRolls; round++) {
+          // Check if the battle should stop.
+          if (attackerArmies <= 1 || defenderArmies <= 0) {
+            break;
+          }
+
+          // Determine the number of dice each side can roll:
+          // Attacker can roll up to 3 dice, but must leave at least 1 army behind.
+          var attackerDiceCount = Math.min(3, attackerArmies - 1);
+          // Defender can roll up to 2 dice, or as many as armies they have.
+          var defenderDiceCount = Math.min(2, defenderArmies);
+
+          // Roll and sort dice.
+          var attackerRolls = sortDescending(rollDice(attackerDiceCount));
+          var defenderRolls = sortDescending(rollDice(defenderDiceCount));
+
+          // Build a string for this round's output.
+          simulationOutput += "<div class='result'><strong>Round " + round + ":</strong><br>";
+          simulationOutput += "Attacker rolls (" + attackerDiceCount + "): " + attackerRolls.join(", ") + "<br>";
+          simulationOutput += "Defender rolls (" + defenderDiceCount + "): " + defenderRolls.join(", ") + "<br>";
+
+          // Compare dice pair by pair.
+          var comparisons = Math.min(attackerRolls.length, defenderRolls.length);
+          for (var i = 0; i < comparisons; i++) {
+            if (attackerRolls[i] > defenderRolls[i]) {
+              defenderArmies--;  // Defender loses one army.
+              simulationOutput += "Comparison " + (i+1) + ": Attacker wins (Defender loses 1 army).<br>";
+            } else {
+              attackerArmies--;  // Attacker loses one army (ties favor the defender).
+              simulationOutput += "Comparison " + (i+1) + ": Defender wins (Attacker loses 1 army).<br>";
+            }
+          }
+
+          simulationOutput += "<strong>Remaining:</strong> Attacker: " + attackerArmies + " | Defender: " + defenderArmies;
+          simulationOutput += "</div>";
+        }
+
+        // Build the battle summary with bolding.
+        var winner;
+        if (defenderArmies <= 0) {
+          winner = "<b>Attacker</b> wins the battle!";
+        } else if (attackerArmies <= 1) {
+          winner = "<b>Defender</b> holds the territory!";
+        } else {
+          winner = "Battle ended after " + potentialRolls + " rounds with no decisive winner.";
+        }
+        
+        // Calculate how many armies were lost from each side.
+        var lostAttacker = initialAttackerArmies - attackerArmies;
+        var lostDefender = initialDefenderArmies - defenderArmies;
+        
+        // Build the battle summary and place it at the top.
+        var summaryOutput = "<div class='summary'><strong>Battle Summary:</strong><br>";
+        summaryOutput += "Result: " + winner + "<br>";
+        summaryOutput += "Attacker lost: <b>" + lostAttacker + "</b> armies<br>";
+        summaryOutput += "Defender lost: <b>" + lostDefender + "</b> armies</div>";
+        
+        // Combine summary and detailed round-by-round output.
+        simulationOutput = summaryOutput + simulationOutput;
+        
+        // Display the complete output.
+        $("#results").html(simulationOutput);
+      });
+    });
+  </script>
+</body>
+</html>
